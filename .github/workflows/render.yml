@@ -1,0 +1,144 @@
+name: Render Video
+
+on:
+  repository_dispatch:
+    types: [render-psych]
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install edge-tts
+        run: pip install edge-tts
+
+      - name: Write story text to file
+        env:
+          STORY_TEXT: ${{ github.event.client_payload.story_text }}
+        run: node -e "require('fs').writeFileSync('story.txt', process.env.STORY_TEXT)"
+
+      - name: Generate audio with edge-tts
+        run: |
+          mkdir -p public
+          edge-tts --voice hi-IN-MadhurNeural --rate=+15% --file story.txt --write-media public/audio.mp3
+
+      - name: Write props to file
+        env:
+          CLIPS_JSON: ${{ toJSON(github.event.client_payload.clips_data) }}
+          OVERLAY_TITLE: ${{ toJSON(github.event.client_payload.overlay_title) }}
+        run: |
+          node -e "
+          const clips = JSON.parse(process.env.CLIPS_JSON);
+          const overlayTitle = JSON.parse(process.env.OVERLAY_TITLE);
+          const props = { ...clips, overlayTitle };
+          require('fs').writeFileSync('props.json', JSON.stringify(props));
+          "
+
+      - name: Render video
+        run: npx remotion render PsychComp out/video.mp4 --props=props.json
+
+      - name: Publish video as release asset
+        id: videolink
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="psych-${{ github.run_id }}"
+          gh release create "$TAG" out/video.mp4 --title "$TAG" --notes "auto render" --repo "${{ github.repository }}"
+          echo "link=https://github.com/${{ github.repository }}/releases/download/$TAG/video.mp4" >> $GITHUB_OUTPUT
+
+      - name: Upload to YouTube
+        id: upload
+        env:
+          CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_TITLE: ${{ toJSON(github.event.client_payload.title) }}
+          VIDEO_DESCRIPTION: ${{ toJSON(github.event.client_payload.description) }}
+          VIDEO_TAGS: ${{ toJSON(github.event.client_payload.tags) }}
+        run: |
+          set -euo pipefail
+
+          ACCESS_TOKEN=$(curl -s --request POST \
+            --data "client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token" \
+            https://oauth2.googleapis.com/token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
+
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "undefined" ]; then
+            echo "Access token nahi mila"
+            exit 1
+          fi
+
+          node -e "
+          const fs = require('fs');
+          const body = { snippet: { title: JSON.parse(process.env.VIDEO_TITLE), description: JSON.parse(process.env.VIDEO_DESCRIPTION), tags: JSON.parse(process.env.VIDEO_TAGS) }, status: { privacyStatus: 'unlisted', containsSyntheticMedia: true } };
+          fs.writeFileSync('snippet.json', JSON.stringify(body));
+          "
+
+          FILESIZE=$(stat -c%s out/video.mp4)
+
+          curl -s -D headers.txt -o /dev/null \
+            -X POST "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json; charset=UTF-8" \
+            -H "X-Upload-Content-Type: video/mp4" \
+            -H "X-Upload-Content-Length: $FILESIZE" \
+            -d @snippet.json
+
+          UPLOAD_URL=$(grep -i "^location:" headers.txt | sed 's/[Ll]ocation: //I' | tr -d '\r\n')
+
+          if [ -z "$UPLOAD_URL" ]; then
+            echo "Upload URL nahi mili"
+            exit 1
+          fi
+
+          HTTP_STATUS=$(curl -s -o upload_response.json -w "%{http_code}" -X PUT "$UPLOAD_URL" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: video/mp4" \
+            --upload-file out/video.mp4)
+
+          echo "Upload status: $HTTP_STATUS"
+          cat upload_response.json
+
+          if [ "$HTTP_STATUS" -ge 400 ]; then
+            exit 1
+          fi
+
+          VIDEO_ID=$(node -pe "JSON.parse(require('fs').readFileSync('upload_response.json')).id")
+          echo "video_id=$VIDEO_ID" >> $GITHUB_OUTPUT
+          echo "Video uploaded (unlisted), ID: $VIDEO_ID"
+
+      - name: Wait then publish video
+        env:
+          CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_ID: ${{ steps.upload.outputs.video_id }}
+        run: |
+          sleep 1800
+          ACCESS_TOKEN=$(curl -s --request POST \
+            --data "client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token" \
+            https://oauth2.googleapis.com/token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
+
+          curl -s -X PUT "https://www.googleapis.com/youtube/v3/videos?part=status" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"id\": \"$VIDEO_ID\", \"status\": {\"privacyStatus\": \"public\"}}"
+
+          echo "Video ab public hai"
