@@ -38,7 +38,7 @@ jobs:
       - name: Generate audio with edge-tts
         run: |
           mkdir -p public
-          edge-tts --voice hi-IN-MadhurNeural --rate=+15% --file story.txt --write-media public/audio.mp3
+          edge-tts --voice hi-IN-MadhurNeural --rate=+20% --file story.txt --write-media public/audio.mp3
 
       # NEW: Build timeline using actual audio duration
       - name: Build timeline based on actual audio duration
