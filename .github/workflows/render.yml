@@ -40,18 +40,46 @@ jobs:
           mkdir -p public
           edge-tts --voice hi-IN-MadhurNeural --rate=+15% --file story.txt --write-media public/audio.mp3
 
-      - name: Write props to file
+      # NEW: Build timeline using actual audio duration
+      - name: Build timeline based on actual audio duration
         env:
-          CLIPS_JSON: ${{ toJSON(github.event.client_payload.clips_data) }}
+          ELEMENTS_JSON: ${{ toJSON(github.event.client_payload.elements_pool) }}
           OVERLAY_TITLE: ${{ toJSON(github.event.client_payload.overlay_title) }}
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+          AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 public/audio.mp3)
+
           node -e "
-          const clips = JSON.parse(process.env.CLIPS_JSON);
+          const fs = require('fs');
+          const pool = JSON.parse(process.env.ELEMENTS_JSON);
           const overlayTitle = JSON.parse(process.env.OVERLAY_TITLE);
-          const props = { ...clips, overlayTitle };
-          require('fs').writeFileSync('props.json', JSON.stringify(props));
+          const audioDuration = parseFloat('$AUDIO_DURATION');
+          const maxClipLen = 3;
+
+          const clips = [];
+          let elapsed = 0;
+          let idx = 0;
+
+          while (elapsed < audioDuration && pool.length > 0) {
+            const item = pool[idx % pool.length];
+            const available = item.duration || maxClipLen;
+            const remaining = audioDuration - elapsed;
+            const length = Math.min(maxClipLen, available, remaining);
+
+            if (length <= 0.1) break;
+
+            clips.push({ src: item.source, start: elapsed, length });
+            elapsed += length;
+            idx++;
+          }
+
+          const props = { clips, audioUrl: 'audio.mp3', overlayTitle };
+          fs.writeFileSync('props.json', JSON.stringify(props));
+          console.log('Total clips:', clips.length, 'Total duration:', elapsed, 'Audio duration:', audioDuration);
           "
 
+      # Render video
       - name: Render video
         run: npx remotion render PsychComp out/video.mp4 --props=props.json
 

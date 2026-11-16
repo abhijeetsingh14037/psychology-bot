@@ -17,19 +17,21 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      {clips.map((clip, index) => {
-        const startFrame = Math.round(clip.start * fps);
-        const durationFrames = Math.round(clip.length * fps);
+      <AbsoluteFill style={{ top: 280, bottom: 280 }}>
+        {clips.map((clip, index) => {
+          const startFrame = Math.round(clip.start * fps);
+          const durationFrames = Math.round(clip.length * fps);
 
-        return (
-          <Sequence key={index} from={startFrame} durationInFrames={durationFrames}>
-            <OffthreadVideo
-              src={clip.src}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </Sequence>
-        );
-      })}
+          return (
+            <Sequence key={index} from={startFrame} durationInFrames={durationFrames}>
+              <OffthreadVideo
+                src={clip.src}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </Sequence>
+          );
+        })}
+      </AbsoluteFill>
 
       {overlayTitle ? (
         <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", paddingTop: 100 }}>
