@@ -14,10 +14,22 @@ type Props = {
 
 export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle }) => {
   const fps = 30;
+  const videoWidth = 1080;
+  const videoHeight = 1080; // square area
+  const topOffset = (1920 - videoHeight) / 2; // 420
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <AbsoluteFill style={{ top: 280, bottom: 280 }}>
+      <div
+        style={{
+          position: "absolute",
+          top: topOffset,
+          left: 0,
+          width: videoWidth,
+          height: videoHeight,
+          overflow: "hidden",
+        }}
+      >
         {clips.map((clip, index) => {
           const startFrame = Math.round(clip.start * fps);
           const durationFrames = Math.round(clip.length * fps);
@@ -31,13 +43,13 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
             </Sequence>
           );
         })}
-      </AbsoluteFill>
+      </div>
 
       {overlayTitle ? (
-        <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", paddingTop: 100 }}>
+        <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", paddingTop: 90 }}>
           <div
             style={{
-              fontSize: 64,
+              fontSize: 58,
               fontWeight: 900,
               fontFamily: "sans-serif",
               textShadow:
@@ -45,6 +57,7 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
               display: "flex",
               gap: 14,
               textAlign: "center",
+              maxWidth: 950,
             }}
           >
             {overlayTitle.split(/\*(.+?)\*/).map((part, i) =>
