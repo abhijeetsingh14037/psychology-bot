@@ -14,9 +14,8 @@ type Props = {
 
 export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle }) => {
   const fps = 30;
-  const videoWidth = 1080;
-  const videoHeight = 1080; // square area
-  const topOffset = (1920 - videoHeight) / 2; // 420
+  const videoSize = 1080;
+  const topOffset = (1920 - videoSize) / 2; // 420
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
@@ -25,8 +24,8 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
           position: "absolute",
           top: topOffset,
           left: 0,
-          width: videoWidth,
-          height: videoHeight,
+          width: videoSize,
+          height: videoSize,
           overflow: "hidden",
         }}
       >
@@ -46,7 +45,19 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
       </div>
 
       {overlayTitle ? (
-        <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", paddingTop: 90 }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: videoSize,
+            height: topOffset,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            paddingBottom: 30,
+          }}
+        >
           <div
             style={{
               fontSize: 58,
@@ -55,9 +66,11 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
               textShadow:
                 "3px 3px 0 black, -3px -3px 0 black, 3px -3px 0 black, -3px 3px 0 black, 0 3px 0 black, 0 -3px 0 black, 3px 0 0 black, -3px 0 0 black",
               display: "flex",
+              flexWrap: "wrap",
               gap: 14,
               textAlign: "center",
               maxWidth: 950,
+              justifyContent: "center",
             }}
           >
             {overlayTitle.split(/\*(.+?)\*/).map((part, i) =>
@@ -68,10 +81,22 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
               )
             )}
           </div>
-        </AbsoluteFill>
+        </div>
       ) : null}
 
-      <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 70 }}>
+      <div
+        style={{
+          position: "absolute",
+          top: topOffset + videoSize,
+          left: 0,
+          width: videoSize,
+          height: topOffset,
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "center",
+          paddingTop: 30,
+        }}
+      >
         <div
           style={{
             fontSize: 30,
@@ -85,7 +110,7 @@ export const PsychComponent: React.FC<Props> = ({ clips, audioUrl, overlayTitle 
         >
           BRAINBOOST
         </div>
-      </AbsoluteFill>
+      </div>
 
       {audioUrl ? (
         <Audio src={audioUrl.startsWith("http") ? audioUrl : staticFile(audioUrl)} />
